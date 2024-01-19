@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -35,6 +36,7 @@ import (
 	netpb "chainmaker.org/chainmaker/pb-go/v2/net"
 	"chainmaker.org/chainmaker/protocol/v2"
 	"chainmaker.org/chainmaker/raftwal/v2/wal"
+	sdk "chainmaker.org/chainmaker/sdk-go/v2"
 	"chainmaker.org/chainmaker/utils/v2"
 	"github.com/gogo/protobuf/proto"
 	"github.com/thoas/go-funk"
@@ -158,6 +160,9 @@ type ConsensusRaftImpl struct {
 
 	// committer of the core engine
 	blockCommitter protocol.BlockCommitter
+
+	// sdk client
+	sdkClient *sdk.ChainClient
 }
 
 // SnapshotArgs is snapshot args for raft
@@ -570,80 +575,75 @@ func (consensus *ConsensusRaftImpl) ProposeBlock(block *common.Block) {
 		return
 	}
 	payload := tx.GetPayload()
+	result := tx.GetResult()
+
 	if payload == nil {
 		consensus.logger.Errorf("[%x] block is challenge, but payload is nil", consensus.Id)
 		return
 	}
-	contractName := payload.ContractName
-	method := payload.Method
+	lastedTxs := consensus.ledgerCache.GetLastCommittedBlock().GetTxs()
+	if len(lastedTxs) == 0 {
+		consensus.logger.Errorf("[%x] block is challenge, but lastedTxs is nil", consensus.Id)
+		return
+	}
+	lastedTx := lastedTxs[0]
+	if lastedTx == nil {
+		consensus.logger.Errorf("[%x] block is challenge, but lastedTx is nil", consensus.Id)
+		return
+	}
+	// todo bug
+	status := result.ContractResult.Result
+	prevStatus := lastedTx.GetResult().ContractResult.Result
 
-	params := payload.Parameters
+	// 只有调用用户合约的时候才会去判断是否需要挑战
+	contractName, contractMethod := payload.ContractName, payload.Method
+	if _, ok := NativeContracts[contractName]; !ok {
+		err := consensus.blockVerifier.VerifyBlock(block, protocol.PROPOSER_VERIFY)
+		if err != nil && errors.Is(err, errors.New("block no valid")) {
+			// 如果挑战成功，说明block is无效的，那么直接返回
+			// 如果挑战失败，说明block is有效的，那么继续往下走
+			parameters := payload.GetParameters()
+			b, err := json.Marshal(parameters)
+			if err != nil {
+				consensus.logger.Errorf("[%x] block is challenge, but payload is nil", block.GetHeader().BlockHeight)
+				return
+			}
+			kvs := []*common.KeyValuePair{
+				{
+					Key:   AppNameKey,
+					Value: []byte(contractName),
+				},
+				{
+					Key:   MethodKey,
+					Value: []byte(contractMethod),
+				},
+				{
+					Key:   ParamKey,
+					Value: b,
+				},
+				{
+					Key:   PreTxStatusKey,
+					Value: prevStatus,
+				},
+				{
+					Key:   TxStatusKey,
+					Value: status,
+				},
+			}
 
-	consensus.logger.Infof("ProposeBlock contractName:%s, method:%s\n", contractName, method)
-
-	for _, item := range params {
-		consensus.logger.Infof("ProposeBlock params:%s", item)
+			consensus.logger.Infof("[%x] block start challenge", consensus.Id)
+			isSuccess, err := Challenge(consensus.sdkClient, kvs)
+			if err != nil {
+				consensus.logger.Errorf("[%x] block is challenge, Challenge error:%+v", consensus.Id, err)
+				return
+			}
+			consensus.logger.Infof("block [%x] finish challenge, challenge_status: %v", block.GetHeader().GetBlockHeight(), isSuccess)
+			if isSuccess {
+				return
+			}
+		}
 	}
 
-	// err := consensus.blockVerifier.VerifyBlock(block, protocol.PROPOSER_VERIFY)
-	// if err != nil && errors.Is(err, errors.New("block no valid")) {
-	// 	// todo call chainmaker sdk to start challenge
-	// 	// 如果挑战成功，说明block is无效的，那么直接返回
-	// 	// 如果挑战失败，说明block is有效的，那么继续往下走
-	// 	// Challenge()
-	// 	txs := block.GetTxs()
-	// 	if len(txs) == 0 {
-	// 		consensus.logger.Errorf("[%x] block is challenge, but no txs", consensus.Id)
-	// 		return
-	// 	}
-	// 	tx := txs[0]
-	// 	if tx == nil {
-	// 		consensus.logger.Errorf("[%x] block is challenge, but tx is nil", consensus.Id)
-	// 		return
-	// 	}
-	// 	payload := tx.GetPayload()
-	// 	if payload == nil {
-	// 		consensus.logger.Errorf("[%x] block is challenge, but payload is nil", consensus.Id)
-	// 		return
-	// 	}
-	// 	args := []*common.KeyValuePair{
-	// 		{
-	// 			Key:   AppNameKey,
-	// 			Value: []byte(payload.GetParameter("CONTRACT_NAME")),
-	// 		},
-	// 		{
-	// 			Key:   AppVersionKey,
-	// 			Value: []byte(payload.GetParameter("CONTRACT_VERSION")),
-	// 		},
-	// 		// todo 从payload中获取
-	// 		{
-	// 			Key:   MethodKey,
-	// 			Value: []byte(payload.GetParameter("METHOD")),
-	// 		},
-	// 		{
-	// 			Key:   ParamKey,
-	// 			Value: []byte(payload.GetParameter("PARAM")),
-	// 		},
-	// 		{
-	// 			Key:   PreTxStatusKey,
-	// 			Value: []byte{},
-	// 		},
-	// 		{
-	// 			Key:   TxStatusKey,
-	// 			Value: []byte{},
-	// 		},
-	// 	}
-	// 	consensus.logger.Infof("[%x] block is challenge, start challenge", consensus.Id)
-	// 	isSuccess, err := Challenge(args, "")
-	// 	if err != nil {
-	// 		consensus.logger.Errorf("[%x] block is challenge, Challenge error:%+v", consensus.Id, err)
-	// 		return
-	// 	}
-	// 	if isSuccess {
-	// 		consensus.logger.Errorf("[%x] block is challenge, Challenge success", consensus.Id)
-	// 		return
-	// 	}
-	// }
 	// Add hash and signature to the block
 	hash, sig, err := utils.SignBlock(consensus.chainConf.ChainConfig().Crypto.Hash, consensus.singer, block)
 	if err != nil {

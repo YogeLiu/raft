@@ -15,7 +15,6 @@ const (
 
 const (
 	AppNameKey     = "app_name"
-	AppVersionKey  = "app_version"
 	MethodKey      = "method"
 	ParamKey       = "param"
 	PreTxStatusKey = "pre_tx_status"
@@ -39,12 +38,7 @@ appName := string(params["app_name"])
 	}
 */
 
-func Challenge(args []*common.KeyValuePair, configPath string) (isSuccess bool, err error) {
-	// todo 证书等逻辑
-	client, err := sdk.NewChainClient(sdk.WithConfPath(configPath))
-	if err != nil {
-		return
-	}
+func Challenge(client *sdk.ChainClient, args []*common.KeyValuePair) (isSuccess bool, err error) {
 	defer client.Stop()
 	resp, err := client.InvokeContract(ContractName, ContractMethod, "", args, -1, true)
 	if err != nil {

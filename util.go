@@ -16,6 +16,40 @@ import (
 	"go.etcd.io/etcd/raft/v3/raftpb"
 )
 
+const (
+	CHAIN_CONFIG      = "CHAIN_CONFIG"
+	CHAIN_QUERY       = "CHAIN_QUERY"
+	CERT_MANAGE       = "CERT_MANAGE"
+	GOVERNANCE        = "GOVERNANCE"
+	MULTI_SIGN        = "MULTI_SIGN"
+	CONTRACT_MANAGE   = "CONTRACT_MANAGE"
+	PRIVATE_COMPUTE   = "PRIVATE_COMPUTE"
+	DPOS_ERC20        = "DPOS_ERC20"
+	DPOS_STAKE        = "DPOS_STAKE"
+	SUBSCRIBE_MANAGE  = "SUBSCRIBE_MANAGE"
+	ARCHIVE_MANAGE    = "ARCHIVE_MANAGE"
+	CROSS_TRANSACTION = "CROSS_TRANSACTION"
+	PUBKEY_MANAGE     = "PUBKEY_MANAGE"
+	ACCOUNT_MANAGER   = "ACCOUNT_MANAGER"
+)
+
+var NativeContracts = map[string]struct{}{
+	CHAIN_CONFIG:      {},
+	CHAIN_QUERY:       {},
+	CERT_MANAGE:       {},
+	GOVERNANCE:        {},
+	MULTI_SIGN:        {},
+	CONTRACT_MANAGE:   {},
+	PRIVATE_COMPUTE:   {},
+	DPOS_ERC20:        {},
+	DPOS_STAKE:        {},
+	SUBSCRIBE_MANAGE:  {},
+	ARCHIVE_MANAGE:    {},
+	CROSS_TRANSACTION: {},
+	PUBKEY_MANAGE:     {},
+	ACCOUNT_MANAGER:   {},
+}
+
 // This file is copied from etcd/raft/util.go, and modified for more beautiful format
 func entryFormatter(data []byte) string {
 	if len(data) == 0 {

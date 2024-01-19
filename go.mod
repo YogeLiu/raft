@@ -11,7 +11,7 @@ require (
 	chainmaker.org/chainmaker/pb-go/v2 v2.3.3
 	chainmaker.org/chainmaker/protocol/v2 v2.3.3
 	chainmaker.org/chainmaker/raftwal/v2 v2.1.0
-	chainmaker.org/chainmaker/sdk-go/v2 v2.3.3 // indirect
+	chainmaker.org/chainmaker/sdk-go/v2 v2.3.3
 	chainmaker.org/chainmaker/utils/v2 v2.3.3
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.6.0
