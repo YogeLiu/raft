@@ -1,4 +1,4 @@
-module chainmaker.org/chainmaker/consensus-raft/v2
+module github.com/YogeLiu/raft
 
 go 1.15
 
